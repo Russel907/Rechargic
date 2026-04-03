@@ -108,3 +108,34 @@ class OTTCancelSubscriptionView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class OTTSubscriptionListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            # Search Chargebee subscriptions by phone
+            result = chargebee.Subscription.list({
+                "customer_id[is]": user.phone
+            })
+
+            subscriptions = []
+            for entry in result:
+                sub = entry.subscription
+                subscriptions.append({
+                    "subscription_id": sub.id,
+                    "plan_id": sub.plan_id,
+                    "status": sub.status,
+                    "current_term_start": sub.current_term_start,
+                    "current_term_end": sub.current_term_end,
+                    "next_billing_at": sub.next_billing_at,
+                })
+
+            return Response(subscriptions, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

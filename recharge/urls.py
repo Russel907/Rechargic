@@ -5,7 +5,8 @@ from .views import (
     PlanListView,
     InitiateRechargeView,
     RechargeStatusView,
-    InspayBalanceView
+    InspayBalanceView,
+    RechargeHistoryView
 )
 
 urlpatterns = [
@@ -15,4 +16,5 @@ urlpatterns = [
     path('initiate/', InitiateRechargeView.as_view(), name='initiate-recharge'),
     path('status/', RechargeStatusView.as_view(), name='recharge-status'),
     path('balance/', InspayBalanceView.as_view(), name='inspay-balance'),
+    path('history/', RechargeHistoryView.as_view(), name='recharge-history'),
 ]

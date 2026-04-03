@@ -10,6 +10,24 @@ from django.db import transaction
 from .models import RechargeTransaction, Operator
 from .utils import initiate_recharge, check_recharge_status, check_inspay_balance
 
+def award_recharge_points(user, amount):
+    from rewards.models import RewardPoints, RewardTransaction
+    # 1 point for every ₹10 spent
+    points_earned = int(float(amount) // 10)
+
+    if points_earned > 0:
+        reward, _ = RewardPoints.objects.get_or_create(user=user)
+        reward.total_points += points_earned
+        reward.save()
+
+        RewardTransaction.objects.create(
+            reward=reward,
+            points=points_earned,
+            transaction_type='earned',
+            category='recharge',
+            description=f'Earned {points_earned} points for ₹{amount} recharge'
+        )
+
 class OperatorListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -119,6 +137,7 @@ class InitiateRechargeView(APIView):
 
         if inspay_status == 'Success':
             recharge_txn.status = 'success'
+            award_recharge_points(request.user, amount)
         elif inspay_status == 'Failure':
             recharge_txn.status = 'failure'
         else:
@@ -198,3 +217,26 @@ class InspayBalanceView(APIView):
             {"error": "Could not fetch balance."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+class RechargeHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        transactions = RechargeTransaction.objects.filter(
+            user=request.user
+        ).order_by('-created_at')
+
+        data = []
+        for t in transactions:
+            data.append({
+                "order_id": t.order_id,
+                "mobile_number": t.mobile_number,
+                "operator": t.operator.name if t.operator else None,
+                "amount": t.amount,
+                "status": t.status,
+                "txid": t.txid,
+                "message": t.message,
+                "created_at": t.created_at,
+            })
+
+        return Response(data, status=status.HTTP_200_OK)
