@@ -17,13 +17,35 @@ class RewardPointsView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+# class RewardItemListView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         items = RewardItem.objects.filter(is_active=True)
+#         serializer = RewardItemSerializer(items, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class RewardItemListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         items = RewardItem.objects.filter(is_active=True)
-        serializer = RewardItemSerializer(items, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        reward, _ = RewardPoints.objects.get_or_create(user=request.user)
+        user_points = reward.total_points
+
+        data = []
+        for item in items:
+            data.append({
+                "id": item.id,
+                "name": item.name,
+                "description": item.description,
+                "points_required": item.points_required,
+                "min_points_to_unlock": item.min_points_to_unlock,
+                "is_locked": user_points < item.min_points_to_unlock,
+            })
+
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class RedeemRewardView(APIView):

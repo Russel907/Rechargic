@@ -234,9 +234,33 @@ class RechargeHistoryView(APIView):
                 "operator": t.operator.name if t.operator else None,
                 "amount": t.amount,
                 "status": t.status,
-                "txid": t.txid,
+                "txid": t.inspay_txid,
                 "message": t.message,
                 "created_at": t.created_at,
+            })
+
+        return Response(data, status=status.HTTP_200_OK)
+
+class ActivePlanView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Get latest successful recharge for each operator
+        from django.db.models import Max
+
+        latest_recharges = RechargeTransaction.objects.filter(
+            user=request.user,
+            status='success'
+        ).order_by('-created_at')
+
+        data = []
+        for txn in latest_recharges:
+            data.append({
+                "operator": txn.operator.name if txn.operator else "Unknown",
+                "mobile_number": txn.mobile_number,
+                "amount": txn.amount,
+                "recharged_at": txn.created_at,
+                "order_id": txn.order_id,
             })
 
         return Response(data, status=status.HTTP_200_OK)

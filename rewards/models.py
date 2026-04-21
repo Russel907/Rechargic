@@ -41,8 +41,10 @@ class RewardItem(models.Model):
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=255)
     points_required = models.IntegerField()
+    min_points_to_unlock = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.name} - {self.points_required} pts"
+

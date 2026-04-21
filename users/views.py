@@ -264,3 +264,27 @@ class DeleteAccountView(APIView):
             {"message": "Account deleted successfully!"},
             status=status.HTTP_200_OK
         )
+
+class ReferralView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        referrals = User.objects.filter(referred_by=user)
+
+        return Response(
+            {
+                "referral_code": user.referral_code,
+                "referral_link": f"https://rechargic.vercel.app/signup?ref={user.referral_code}",
+                "total_referrals": referrals.count(),
+                "referrals": [
+                    {
+                        "name": r.name,
+                        "phone": r.phone,
+                        "joined": r.created_at
+                    }
+                    for r in referrals
+                ]
+            },
+            status=status.HTTP_200_OK
+        )

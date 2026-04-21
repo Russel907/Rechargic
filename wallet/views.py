@@ -3,10 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
-
+from decimal import Decimal
 from .models import Wallet, Transaction
 from .serializers import WalletSerializer, AddMoneySerializer, TransactionSerializer
-
 
 class WalletView(APIView):
     permission_classes = [IsAuthenticated]
@@ -75,7 +74,7 @@ class WalletTransferView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        amount = float(amount)
+        amount = Decimal(str(amount))
         if amount <= 0:
             return Response(
                 {"error": "Amount must be greater than 0."},

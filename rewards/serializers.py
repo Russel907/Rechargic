@@ -19,7 +19,7 @@ class RewardPointsSerializer(serializers.ModelSerializer):
 class RewardItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = RewardItem
-        fields = ['id', 'name', 'description', 'points_required']
+        fields = ['id', 'name', 'description', 'points_required', 'min_points_to_unlock']
 
 
 class RedeemSerializer(serializers.Serializer):
