@@ -5,7 +5,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.permissions import IsAuthenticated
-
+import re
 from .models import User, OTP
 from .serializers import SignupSerializer
 from .utils import send_otp_via_messagecentral
@@ -29,6 +29,13 @@ class SendOTPView(APIView):
         if not phone:
             return Response(
                 {"error": "Phone number is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+         # Validate phone format
+        if not re.match(r'^\d{10}$', str(phone)):
+            return Response(
+                {"error": "Phone number must be exactly 10 digits."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
