@@ -4,16 +4,15 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from datetime import timedelta
-import random
 from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User, OTP
 from .serializers import SignupSerializer
 from .utils import send_otp_via_messagecentral
 
-OTP_TTL_SECONDS = 600       # 10 minutes
-RESEND_COOLDOWN_SECONDS = 60  # 1 minute cooldown
+OTP_TTL_SECONDS = 600
+RESEND_COOLDOWN_SECONDS = 60
+
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -22,17 +21,6 @@ def get_tokens_for_user(user):
         'access': str(refresh.access_token),
     }
 
-
-class SignupView(APIView):
-    def post(self, request):
-        serializer = SignupSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            return Response(
-                {"message": "Account created successfully!", "phone": user.phone},
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class SendOTPView(APIView):
     def post(self, request):
@@ -44,26 +32,26 @@ class SendOTPView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if not User.objects.filter(phone=phone).exists():
-            return Response(
-                {"error": "No account found with this phone number. Please signup first."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
         # Cooldown check
-        last_otp = OTP.objects.filter(phone=phone, is_used=False).order_by('-created_at').first()
+        last_otp = OTP.objects.filter(
+            phone=phone,
+            is_used=False
+        ).order_by('-created_at').first()
+
         if last_otp:
             seconds_passed = (timezone.now() - last_otp.created_at).total_seconds()
             if seconds_passed < RESEND_COOLDOWN_SECONDS:
                 retry_after = int(RESEND_COOLDOWN_SECONDS - seconds_passed)
                 return Response(
-                    {"error": "Please wait before requesting another OTP.", "retry_after_seconds": retry_after},
+                    {
+                        "error": "Please wait before requesting another OTP.",
+                        "retry_after_seconds": retry_after
+                    },
                     status=status.HTTP_429_TOO_MANY_REQUESTS
                 )
 
         sms_text = "Your Rechargic verification code is <<< OTP >>>. It will expire in 10 minutes."
 
-        # Send via MessageCentral — they generate the OTP
         ok, provider_resp = send_otp_via_messagecentral(phone, sms_text)
         if not ok:
             return Response(
@@ -71,7 +59,6 @@ class SendOTPView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # Save OTP record with MessageCentral's verification ID
         otp_obj = OTP.objects.create(phone=phone, otp_code="mc_generated")
 
         data = provider_resp.get("data") if isinstance(provider_resp, dict) else None
@@ -82,7 +69,7 @@ class SendOTPView(APIView):
 
         return Response(
             {
-                "message": "OTP sent successfully to your phone number.",
+                "message": "OTP sent successfully.",
                 "expires_in": "10 minutes"
             },
             status=status.HTTP_200_OK
@@ -100,7 +87,6 @@ class VerifyOTPView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get latest unused OTP for this phone
         try:
             otp = OTP.objects.filter(
                 phone=phone,
@@ -178,19 +164,57 @@ class VerifyOTPView(APIView):
         otp.is_used = True
         otp.save()
 
-        # Return JWT tokens — login success
-        user = User.objects.get(phone=phone)
-        tokens = get_tokens_for_user(user)
+        # Check if user exists
+        user_exists = User.objects.filter(phone=phone).exists()
 
-        return Response(
-            {
-                "message": "Login successful!",
-                "name": user.name,
-                "phone": user.phone,
-                "tokens": tokens
-            },
-            status=status.HTTP_200_OK
-        )
+        if user_exists:
+            # Existing user — login directly
+            user = User.objects.get(phone=phone)
+            tokens = get_tokens_for_user(user)
+            return Response(
+                {
+                    "message": "Login successful!",
+                    "is_new_user": False,
+                    "name": user.name,
+                    "phone": user.phone,
+                    "tokens": tokens
+                },
+                status=status.HTTP_200_OK
+            )
+        else:
+            # New user — ask frontend to collect name
+            return Response(
+                {
+                    "message": "OTP verified. Please enter your name to complete registration.",
+                    "is_new_user": True,
+                    "phone": phone,
+                },
+                status=status.HTTP_200_OK
+            )
+
+
+class SignupView(APIView):
+    """
+    Called after OTP verification for new users only.
+    Frontend sends name + phone after OTP is verified.
+    """
+    def post(self, request):
+        serializer = SignupSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            tokens = get_tokens_for_user(user)
+            return Response(
+                {
+                    "message": "Account created successfully!",
+                    "is_new_user": True,
+                    "name": user.name,
+                    "phone": user.phone,
+                    "tokens": tokens
+                },
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -202,6 +226,7 @@ class UserProfileView(APIView):
                 "name": user.name,
                 "phone": user.phone,
                 "joined": user.created_at,
+                "referral_code": user.referral_code,
             },
             status=status.HTTP_200_OK
         )
@@ -209,7 +234,7 @@ class UserProfileView(APIView):
     def put(self, request):
         user = request.user
         name = request.data.get('name')
-        
+
         if not name:
             return Response(
                 {"error": "Name is required."},
@@ -218,7 +243,7 @@ class UserProfileView(APIView):
 
         user.name = name
         user.save()
-        
+
         return Response(
             {
                 "message": "Profile updated successfully!",
@@ -227,6 +252,7 @@ class UserProfileView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -264,6 +290,7 @@ class DeleteAccountView(APIView):
             {"message": "Account deleted successfully!"},
             status=status.HTTP_200_OK
         )
+
 
 class ReferralView(APIView):
     permission_classes = [IsAuthenticated]
