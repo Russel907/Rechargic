@@ -10,8 +10,11 @@ from .models import User, OTP
 from .serializers import SignupSerializer
 from .utils import send_otp_via_messagecentral
 
-OTP_TTL_SECONDS = 600
-RESEND_COOLDOWN_SECONDS = 60
+OTP_TTL_SECONDS = 300          # OTP valid for 10 mins
+RESEND_COOLDOWN_SECONDS = 60   # Wait 60s before resend
+MAX_OTP_ATTEMPTS = 5           # 🔒 Max wrong tries per OTP
+MAX_OTP_PER_DAY = 20        # high for testing  - change to 5 while production        # 🔒 Max OTPs a phone can request per day
+LOCKOUT_DURATION_MINUTES = 2  # change to 30 before going live
 
 
 def get_tokens_for_user(user):
@@ -31,18 +34,43 @@ class SendOTPView(APIView):
                 {"error": "Phone number is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
-         # Validate phone format
+
         if not re.match(r'^\d{10}$', str(phone)):
             return Response(
                 {"error": "Phone number must be exactly 10 digits."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Cooldown check
+        # 🔒 Check if account is locked
+        user = User.objects.filter(phone=phone).first()
+        if user and user.is_locked():
+            seconds_left = int((user.locked_until - timezone.now()).total_seconds())
+            return Response(
+                {
+                    "error": "Account temporarily locked due to too many failed attempts.",
+                    "retry_after_seconds": seconds_left
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+        # 🔒 Daily OTP request cap — max 5 OTPs per phone per day
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        todays_otp_count = OTP.objects.filter(
+            phone=phone,
+            created_at__gte=today_start
+        ).count()
+
+        if todays_otp_count >= MAX_OTP_PER_DAY:
+            return Response(
+                {"error": "Too many OTP requests today. Please try again tomorrow."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+        # Resend cooldown check (already existed)
         last_otp = OTP.objects.filter(
             phone=phone,
-            is_used=False
+            is_used=False,
+            is_expired=False
         ).order_by('-created_at').first()
 
         if last_otp:
@@ -57,7 +85,11 @@ class SendOTPView(APIView):
                     status=status.HTTP_429_TOO_MANY_REQUESTS
                 )
 
-        sms_text = "Your Rechargic verification code is <<< OTP >>>. It will expire in 10 minutes."
+            # 🔒 Mark old unused OTP as expired before sending a new one
+            last_otp.is_expired = True
+            last_otp.save()
+
+        sms_text = "Your Rechargic verification code is <<< OTP >>>. It will expire in 5 minutes."
 
         ok, provider_resp = send_otp_via_messagecentral(phone, sms_text)
         if not ok:
@@ -77,7 +109,7 @@ class SendOTPView(APIView):
         return Response(
             {
                 "message": "OTP sent successfully.",
-                "expires_in": "10 minutes"
+                "expires_in": "5 minutes"
             },
             status=status.HTTP_200_OK
         )
@@ -94,10 +126,23 @@ class VerifyOTPView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 🔒 Check account lockout
+        user = User.objects.filter(phone=phone).first()
+        if user and user.is_locked():
+            seconds_left = int((user.locked_until - timezone.now()).total_seconds())
+            return Response(
+                {
+                    "error": "Account temporarily locked. Too many failed attempts.",
+                    "retry_after_seconds": seconds_left
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         try:
             otp = OTP.objects.filter(
                 phone=phone,
-                is_used=False
+                is_used=False,
+                is_expired=False
             ).latest('created_at')
         except OTP.DoesNotExist:
             return Response(
@@ -108,10 +153,25 @@ class VerifyOTPView(APIView):
         # Check expiry
         expiry_time = otp.created_at + timedelta(seconds=OTP_TTL_SECONDS)
         if timezone.now() > expiry_time:
+            otp.is_expired = True
+            otp.save()
             return Response(
                 {"error": "OTP has expired. Please request a new one."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # 🔒 Check max verify attempts on this OTP
+        if otp.attempts >= MAX_OTP_ATTEMPTS:
+            otp.is_expired = True
+            otp.save()
+            return Response(
+                {"error": "Too many attempts. Please request a new OTP."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+        # 🔒 Increment attempt counter BEFORE calling provider
+        otp.attempts += 1
+        otp.save()
 
         # Validate OTP via MessageCentral
         from .utils import _get_auth_token
@@ -162,20 +222,36 @@ class VerifyOTPView(APIView):
             j = {}
 
         if not (resp.status_code == 200 and j.get("message") == "SUCCESS"):
+            # 🔒 Track failed attempts and lock if needed
+            if user:
+                user.failed_otp_attempts += 1
+                if user.failed_otp_attempts >= MAX_OTP_ATTEMPTS:
+                    user.locked_until = timezone.now() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+                    user.failed_otp_attempts = 0  # reset after lock
+                user.save()
+
+            attempts_left = MAX_OTP_ATTEMPTS - otp.attempts
             return Response(
-                {"error": "Invalid OTP. Please try again."},
+                {
+                    "error": "Invalid OTP. Please try again.",
+                    "attempts_remaining": max(attempts_left, 0)
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Mark OTP as used
+        # ✅ OTP is correct — reset failure counters
         otp.is_used = True
         otp.save()
+
+        if user:
+            user.failed_otp_attempts = 0
+            user.locked_until = None
+            user.save()
 
         # Check if user exists
         user_exists = User.objects.filter(phone=phone).exists()
 
         if user_exists:
-            # Existing user — login directly
             user = User.objects.get(phone=phone)
             tokens = get_tokens_for_user(user)
             return Response(
@@ -189,7 +265,6 @@ class VerifyOTPView(APIView):
                 status=status.HTTP_200_OK
             )
         else:
-            # New user — ask frontend to collect name
             return Response(
                 {
                     "message": "OTP verified. Please enter your name to complete registration.",
@@ -200,11 +275,9 @@ class VerifyOTPView(APIView):
             )
 
 
+# --- All other views unchanged below ---
+
 class SignupView(APIView):
-    """
-    Called after OTP verification for new users only.
-    Frontend sends name + phone after OTP is verified.
-    """
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
@@ -241,24 +314,11 @@ class UserProfileView(APIView):
     def put(self, request):
         user = request.user
         name = request.data.get('name')
-
         if not name:
-            return Response(
-                {"error": "Name is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+            return Response({"error": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
         user.name = name
         user.save()
-
-        return Response(
-            {
-                "message": "Profile updated successfully!",
-                "name": user.name,
-                "phone": user.phone,
-            },
-            status=status.HTTP_200_OK
-        )
+        return Response({"message": "Profile updated successfully!", "name": user.name, "phone": user.phone})
 
 
 class LogoutView(APIView):
@@ -266,37 +326,22 @@ class LogoutView(APIView):
 
     def post(self, request):
         refresh_token = request.data.get('refresh')
-
         if not refresh_token:
-            return Response(
-                {"error": "Refresh token is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+            return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response(
-                {"message": "Logged out successfully!"},
-                status=status.HTTP_200_OK
-            )
-        except Exception as e:
-            return Response(
-                {"error": "Invalid token."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"message": "Logged out successfully!"})
+        except Exception:
+            return Response({"error": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DeleteAccountView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request):
-        user = request.user
-        user.delete()
-        return Response(
-            {"message": "Account deleted successfully!"},
-            status=status.HTTP_200_OK
-        )
+        request.user.delete()
+        return Response({"message": "Account deleted successfully!"})
 
 
 class ReferralView(APIView):
@@ -305,20 +350,14 @@ class ReferralView(APIView):
     def get(self, request):
         user = request.user
         referrals = User.objects.filter(referred_by=user)
-
         return Response(
             {
                 "referral_code": user.referral_code,
                 "referral_link": f"https://rechargic.vercel.app/signup?ref={user.referral_code}",
                 "total_referrals": referrals.count(),
                 "referrals": [
-                    {
-                        "name": r.name,
-                        "phone": r.phone,
-                        "joined": r.created_at
-                    }
+                    {"name": r.name, "phone": r.phone, "joined": r.created_at}
                     for r in referrals
                 ]
-            },
-            status=status.HTTP_200_OK
+            }
         )

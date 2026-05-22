@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 import uuid
 
 
@@ -28,10 +30,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     referral_code = models.CharField(max_length=10, unique=True, null=True, blank=True)
-    referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
+    referred_by = models.ForeignKey(
+        'self', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='referrals'
+    )
+
+    # 🔒 NEW: lockout fields
+    failed_otp_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
-
     USERNAME_FIELD = 'phone'
     REQUIRED_FIELDS = ['name']
 
@@ -39,6 +47,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         if not self.referral_code:
             self.referral_code = str(uuid.uuid4()).replace('-', '').upper()[:8]
         super().save(*args, **kwargs)
+
+    def is_locked(self):
+        if self.locked_until and timezone.now() < self.locked_until:
+            return True
+        return False
 
     def __str__(self):
         return self.phone
@@ -49,6 +62,8 @@ class OTP(models.Model):
     otp_code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     is_used = models.BooleanField(default=False)
+    is_expired = models.BooleanField(default=False)  # 🔒 NEW
+    attempts = models.IntegerField(default=0)         # 🔒 NEW: verify attempt counter
     provider_verification_id = models.CharField(max_length=255, null=True, blank=True)
     provider_transaction_id = models.CharField(max_length=255, null=True, blank=True)
 
