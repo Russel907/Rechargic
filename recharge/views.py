@@ -9,6 +9,11 @@ import uuid
 from django.db import transaction
 from .models import RechargeTransaction, Operator
 from .utils import initiate_recharge, check_recharge_status, check_inspay_balance
+from django.views.decorators.csrf import csrf_exempt
+from django_ratelimit.decorators import ratelimit
+from django.utils.decorators import method_decorator
+import re
+from .models import RechargeTransaction, Operator, DTHTransaction, ElectricityTransaction, FastagTransaction
 
 def award_recharge_points(user, amount):
     from rewards.models import RewardPoints, RewardTransaction
@@ -70,22 +75,46 @@ class PlanListView(APIView):
         serializer = PlanSerializer(plans, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+@method_decorator(ratelimit(key='user', rate='10/h', method='POST', block=True), name='post')
 class InitiateRechargeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Get data from request
-        mobile_number = request.data.get('mobile_number')
+        mobile_number = str(request.data.get('mobile_number', '')).strip()
         amount = request.data.get('amount')
-        opcode = request.data.get('opcode')
+        opcode = str(request.data.get('opcode', '')).strip()
         operator_id = request.data.get('operator_id')
-        value1 = request.data.get('value1', '')
-        value2 = request.data.get('value2', '')
+        value1 = str(request.data.get('value1', '')).strip()
+        value2 = str(request.data.get('value2', '')).strip()
 
-        # Validate required fields
+        # Validations
         if not mobile_number or not amount or not opcode:
             return Response(
                 {"error": "mobile_number, amount and opcode are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not re.match(r'^\d{10}$', mobile_number):
+            return Response(
+                {"error": "Invalid mobile number. Must be exactly 10 digits."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                return Response(
+                    {"error": "Amount must be greater than 0."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if amount > 10000:
+                return Response(
+                    {"error": "Amount cannot exceed ₹10,000 per transaction."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid amount."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -100,7 +129,8 @@ class InitiateRechargeView(APIView):
             except Operator.DoesNotExist:
                 pass
 
-        # Create pending transaction first
+        # Create pending transaction first — always save before calling API
+        # This way if API call crashes, we still have a record
         recharge_txn = RechargeTransaction.objects.create(
             user=request.user,
             operator=operator,
@@ -110,7 +140,7 @@ class InitiateRechargeView(APIView):
             status='pending'
         )
 
-        # Call InsPay API
+        # Call Inspay API
         ok, response = initiate_recharge(
             opcode=opcode,
             number=mobile_number,
@@ -129,7 +159,6 @@ class InitiateRechargeView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # Update transaction with InsPay response
         inspay_status = response.get('status', 'Pending')
         recharge_txn.inspay_txid = response.get('txid')
         recharge_txn.inspay_opid = response.get('opid')
@@ -137,7 +166,7 @@ class InitiateRechargeView(APIView):
 
         if inspay_status == 'Success':
             recharge_txn.status = 'success'
-            award_recharge_points(request.user, amount)
+            # Points NOT awarded here — webhook confirms and awards
         elif inspay_status == 'Failure':
             recharge_txn.status = 'failure'
         else:
@@ -156,7 +185,6 @@ class InitiateRechargeView(APIView):
             },
             status=status.HTTP_200_OK
         )
-
 
 class RechargeStatusView(APIView):
     permission_classes = [IsAuthenticated]
@@ -263,4 +291,578 @@ class ActivePlanView(APIView):
                 "order_id": txn.order_id,
             })
 
+        return Response(data, status=status.HTTP_200_OK)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class InspayWebhookView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        order_id = request.query_params.get('orderid')
+        status_val = request.query_params.get('status')
+        opid = request.query_params.get('opid')
+        utr = request.query_params.get('utr')
+
+        if not order_id or not status_val:
+            return Response({"error": "Missing params"}, status=400)
+
+        # Mobile recharge
+        txn = RechargeTransaction.objects.filter(order_id=order_id).first()
+        if txn and txn.status == 'pending':
+            if status_val == 'Success':
+                txn.status = 'success'
+                txn.inspay_opid = opid
+                txn.message = f"UTR: {utr}"
+                txn.save()
+                award_recharge_points(txn.user, txn.amount)
+            elif status_val == 'Failure':
+                txn.status = 'failure'
+                txn.save()
+            return Response({"message": "OK"}, status=200)
+
+        # DTH
+        dth_txn = DTHTransaction.objects.filter(order_id=order_id).first()
+        if dth_txn and dth_txn.status == 'pending':
+            if status_val == 'Success':
+                dth_txn.status = 'success'
+                dth_txn.inspay_opid = opid
+                dth_txn.save()
+                award_recharge_points(dth_txn.user, dth_txn.amount)
+            elif status_val == 'Failure':
+                dth_txn.status = 'failure'
+                dth_txn.save()
+            return Response({"message": "OK"}, status=200)
+
+        # Electricity
+        elec_txn = ElectricityTransaction.objects.filter(order_id=order_id).first()
+        if elec_txn and elec_txn.status == 'pending':
+            if status_val == 'Success':
+                elec_txn.status = 'success'
+                elec_txn.inspay_opid = opid
+                elec_txn.save()
+                award_recharge_points(elec_txn.user, elec_txn.amount)
+            elif status_val == 'Failure':
+                elec_txn.status = 'failure'
+                elec_txn.save()
+            return Response({"message": "OK"}, status=200)
+
+        # Fastag
+        ft_txn = FastagTransaction.objects.filter(order_id=order_id).first()
+        if ft_txn and ft_txn.status == 'pending':
+            if status_val == 'Success':
+                ft_txn.status = 'success'
+                ft_txn.inspay_opid = opid
+                ft_txn.save()
+                award_recharge_points(ft_txn.user, ft_txn.amount)
+            elif status_val == 'Failure':
+                ft_txn.status = 'failure'
+                ft_txn.save()
+            return Response({"message": "OK"}, status=200)
+
+        return Response({"message": "OK"}, status=200)
+
+DTH_OPERATORS = {
+    'ATV': 'Airtel DTH',
+    'DTV': 'Dish TV',
+    'STV': 'Sun Direct TV',
+    'TTV': 'TATA Play',
+    'VTV': 'Videocon DTH',
+}
+
+class DTHOperatorListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        operators = [
+            {"code": code, "name": name}
+            for code, name in DTH_OPERATORS.items()
+        ]
+        return Response(operators, status=status.HTTP_200_OK)
+
+
+class InitiateDTHRechargeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        customer_id = request.data.get('customer_id')
+        amount = request.data.get('amount')
+        opcode = request.data.get('opcode')
+
+        # Validations
+        if not customer_id or not amount or not opcode:
+            return Response(
+                {"error": "customer_id, amount and opcode are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if opcode not in DTH_OPERATORS:
+            return Response(
+                {"error": "Invalid DTH operator code."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not customer_id.strip():
+            return Response(
+                {"error": "Invalid customer ID."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                return Response(
+                    {"error": "Amount must be greater than 0."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid amount."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order_id = f"DTH{uuid.uuid4().hex[:12].upper()}"
+
+        # Create pending transaction
+        dth_txn = DTHTransaction.objects.create(
+            user=request.user,
+            operator_code=opcode,
+            operator_name=DTH_OPERATORS[opcode],
+            customer_id=customer_id,
+            amount=amount,
+            order_id=order_id,
+            status='pending'
+        )
+
+        # Call Inspay — same API, different opcode
+        ok, response = initiate_recharge(
+            opcode=opcode,
+            number=customer_id,
+            amount=amount,
+            order_id=order_id
+        )
+
+        if not ok:
+            dth_txn.status = 'failure'
+            dth_txn.message = response.get('error', 'Unknown error')
+            dth_txn.save()
+            return Response(
+                {"error": "DTH recharge failed. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        inspay_status = response.get('status', 'Pending')
+        dth_txn.inspay_txid = response.get('txid')
+        dth_txn.inspay_opid = response.get('opid')
+        dth_txn.message = response.get('message')
+
+        if inspay_status == 'Success':
+            dth_txn.status = 'success'
+            award_recharge_points(request.user, amount)
+        elif inspay_status == 'Failure':
+            dth_txn.status = 'failure'
+        else:
+            dth_txn.status = 'pending'
+
+        dth_txn.save()
+
+        return Response(
+            {
+                "message": response.get('message'),
+                "status": dth_txn.status,
+                "order_id": order_id,
+                "txid": response.get('txid'),
+                "customer_id": customer_id,
+                "operator": DTH_OPERATORS[opcode],
+                "amount": amount
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class DTHHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        transactions = DTHTransaction.objects.filter(
+            user=request.user
+        ).order_by('-created_at')
+
+        data = [
+            {
+                "order_id": t.order_id,
+                "customer_id": t.customer_id,
+                "operator": t.operator_name,
+                "amount": t.amount,
+                "status": t.status,
+                "message": t.message,
+                "created_at": t.created_at,
+            }
+            for t in transactions
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+# Electricity biller list — taken from Inspay operator codes
+ELECTRICITY_BILLERS = {
+    'BESCOM': 'Bangalore Electricity Supply Co. Ltd',
+    'MSEDCL': 'Maharashtra State Electricity Distbn Co Ltd',
+    'UPPCL': 'UPPCL-Postpaid and Smart Prepaid Meter Recharge',
+    'TNPDCL': 'Tamil Nadu Power Distribution Corporation Limited',
+    'PSPCL': 'Punjab State Power Corporation Ltd',
+    'AEML': 'Adani Electricity Mumbai Limited',
+    'BSESRSL': 'BSES Rajdhani Power Limited',
+    'BSESYPL': 'BSES Yamuna Power Limited',
+    'DHBVN': 'Dakshin Haryana Bijli Vitran Nigam',
+    'UHBVN': 'Uttar Haryana Bijli Vitran Nigam',
+    'KSEBL': 'Kerala State Electricity Board Ltd',
+    'TPDDL': 'Tata Power - Delhi',
+    'WBSEDCL': 'West Bengal State Electricity Distribution Company Ltd',
+    'JBVNL': 'Jharkhand Bijli Vitran Nigam Limited',
+    'CSPDCL': 'Chhattisgarh State Power Distribution Co. Ltd',
+}
+
+
+class ElectricityBillerListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        billers = [
+            {"code": code, "name": name}
+            for code, name in ELECTRICITY_BILLERS.items()
+        ]
+        return Response(billers, status=status.HTTP_200_OK)
+
+
+class FetchElectricityBillView(APIView):
+    """
+    Step 1 — Fetch bill details before payment.
+    Frontend calls this first to show user their bill amount.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        consumer_number = request.data.get('consumer_number')
+        biller_code = request.data.get('biller_code')
+        mobile = request.data.get('mobile', request.user.phone)
+
+        if not consumer_number or not biller_code:
+            return Response(
+                {"error": "consumer_number and biller_code are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if biller_code not in ELECTRICITY_BILLERS:
+            return Response(
+                {"error": "Invalid biller code."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Temporary order ID for fetch — not used for payment
+        fetch_order_id = f"EFETCH{uuid.uuid4().hex[:10].upper()}"
+
+        ok, response = fetch_electricity_bill(
+            opcode=biller_code,
+            consumer_number=consumer_number,
+            mobile=mobile,
+            order_id=fetch_order_id
+        )
+
+        if not ok:
+            return Response(
+                {"error": "Could not fetch bill. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response(
+            {
+                "biller_code": biller_code,
+                "biller_name": ELECTRICITY_BILLERS[biller_code],
+                "consumer_number": consumer_number,
+                "customer_name": response.get('customerName'),
+                "bill_amount": response.get('billAmount'),
+                "due_date": response.get('dueDate'),
+                "message": response.get('message'),
+                "raw_status": response.get('status'),
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class PayElectricityBillView(APIView):
+    """
+    Step 2 — Pay the bill after user confirms.
+    Frontend sends consumer_number, biller_code, amount.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        consumer_number = request.data.get('consumer_number')
+        biller_code = request.data.get('biller_code')
+        amount = request.data.get('amount')
+        mobile = request.data.get('mobile', request.user.phone)
+        customer_name = request.data.get('customer_name', '')
+        bill_amount = request.data.get('bill_amount', '')
+        due_date = request.data.get('due_date', '')
+
+        if not consumer_number or not biller_code or not amount:
+            return Response(
+                {"error": "consumer_number, biller_code and amount are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if biller_code not in ELECTRICITY_BILLERS:
+            return Response(
+                {"error": "Invalid biller code."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                return Response(
+                    {"error": "Amount must be greater than 0."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid amount."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order_id = f"ELEC{uuid.uuid4().hex[:12].upper()}"
+
+        # Save transaction as pending
+        elec_txn = ElectricityTransaction.objects.create(
+            user=request.user,
+            biller_code=biller_code,
+            biller_name=ELECTRICITY_BILLERS[biller_code],
+            consumer_number=consumer_number,
+            amount=amount,
+            order_id=order_id,
+            status='pending',
+            customer_name=customer_name,
+            bill_amount=bill_amount,
+            due_date=due_date
+        )
+
+        # Call Inspay to pay
+        ok, response = initiate_recharge(
+            opcode=biller_code,
+            number=consumer_number,
+            amount=amount,
+            order_id=order_id,
+            value1=mobile
+        )
+
+        if not ok:
+            elec_txn.status = 'failure'
+            elec_txn.message = response.get('error', 'Unknown error')
+            elec_txn.save()
+            return Response(
+                {"error": "Bill payment failed. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        inspay_status = response.get('status', 'Pending')
+        elec_txn.inspay_txid = response.get('txid')
+        elec_txn.inspay_opid = response.get('opid')
+        elec_txn.message = response.get('message')
+
+        if inspay_status == 'Success':
+            elec_txn.status = 'success'
+            award_recharge_points(request.user, amount)
+        elif inspay_status == 'Failure':
+            elec_txn.status = 'failure'
+        else:
+            elec_txn.status = 'pending'
+
+        elec_txn.save()
+
+        return Response(
+            {
+                "message": response.get('message'),
+                "status": elec_txn.status,
+                "order_id": order_id,
+                "txid": response.get('txid'),
+                "consumer_number": consumer_number,
+                "biller": ELECTRICITY_BILLERS[biller_code],
+                "amount": amount
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class ElectricityHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        transactions = ElectricityTransaction.objects.filter(
+            user=request.user
+        ).order_by('-created_at')
+
+        data = [
+            {
+                "order_id": t.order_id,
+                "consumer_number": t.consumer_number,
+                "biller": t.biller_name,
+                "amount": t.amount,
+                "status": t.status,
+                "customer_name": t.customer_name,
+                "due_date": t.due_date,
+                "created_at": t.created_at,
+            }
+            for t in transactions
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+FASTAG_OPERATORS = {
+    'HDFCFT': 'HDFC Bank FASTag',
+    'ICICIFT': 'ICICI Bank FASTag',
+    'SBOIFT': 'State Bank of India NETC FASTag',
+    'YBLFT': 'Yes Bank FASTag',
+    'IDFCFT': 'IDFC FIRST Bank FASTag',
+    'KMBFT': 'Kotak Mahindra Bank FASTag',
+    'PNBLFT': 'Punjab National Bank FASTag',
+    'BOBFT': 'Bank of Baroda FASTag',
+    'IBFT': 'IndusInd Bank FASTag',
+    'IDBIFT': 'IDBI Bank FASTag',
+    'FBFT': 'Federal Bank FASTag',
+    'AXISFT': 'Axis Bank FASTag',
+}
+
+
+class FastagOperatorListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        operators = [
+            {"code": code, "name": name}
+            for code, name in FASTAG_OPERATORS.items()
+        ]
+        return Response(operators, status=status.HTTP_200_OK)
+
+
+class InitiateFastagRechargeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        vehicle_number = str(request.data.get('vehicle_number', '')).strip().upper()
+        amount = request.data.get('amount')
+        opcode = str(request.data.get('opcode', '')).strip()
+
+        # Validations
+        if not vehicle_number or not amount or not opcode:
+            return Response(
+                {"error": "vehicle_number, amount and opcode are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if opcode not in FASTAG_OPERATORS:
+            return Response(
+                {"error": "Invalid Fastag operator code."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Indian vehicle number format validation
+        # Formats: MH12AB1234 or MH12A1234
+        if not re.match(r'^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$', vehicle_number):
+            return Response(
+                {"error": "Invalid vehicle number format. Example: MH12AB1234"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                return Response(
+                    {"error": "Amount must be greater than 0."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if amount > 50000:
+                return Response(
+                    {"error": "Amount cannot exceed ₹50,000."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid amount."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order_id = f"FT{uuid.uuid4().hex[:12].upper()}"
+
+        fastag_txn = FastagTransaction.objects.create(
+            user=request.user,
+            operator_code=opcode,
+            operator_name=FASTAG_OPERATORS[opcode],
+            vehicle_number=vehicle_number,
+            amount=amount,
+            order_id=order_id,
+            status='pending'
+        )
+
+        # Inspay — vehicle number goes as 'number' field
+        ok, response = initiate_recharge(
+            opcode=opcode,
+            number=vehicle_number,
+            amount=amount,
+            order_id=order_id
+        )
+
+        if not ok:
+            fastag_txn.status = 'failure'
+            fastag_txn.message = response.get('error', 'Unknown error')
+            fastag_txn.save()
+            return Response(
+                {"error": "Fastag recharge failed. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        inspay_status = response.get('status', 'Pending')
+        fastag_txn.inspay_txid = response.get('txid')
+        fastag_txn.inspay_opid = response.get('opid')
+        fastag_txn.message = response.get('message')
+
+        if inspay_status == 'Success':
+            fastag_txn.status = 'success'
+        elif inspay_status == 'Failure':
+            fastag_txn.status = 'failure'
+        else:
+            fastag_txn.status = 'pending'
+
+        fastag_txn.save()
+
+        return Response(
+            {
+                "message": response.get('message'),
+                "status": fastag_txn.status,
+                "order_id": order_id,
+                "txid": response.get('txid'),
+                "vehicle_number": vehicle_number,
+                "operator": FASTAG_OPERATORS[opcode],
+                "amount": amount
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class FastagHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        transactions = FastagTransaction.objects.filter(
+            user=request.user
+        ).order_by('-created_at')
+
+        data = [
+            {
+                "order_id": t.order_id,
+                "vehicle_number": t.vehicle_number,
+                "operator": t.operator_name,
+                "amount": t.amount,
+                "status": t.status,
+                "message": t.message,
+                "created_at": t.created_at,
+            }
+            for t in transactions
+        ]
         return Response(data, status=status.HTTP_200_OK)

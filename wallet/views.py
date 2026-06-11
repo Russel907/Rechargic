@@ -144,3 +144,63 @@ class WalletTransferView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+class UnifiedHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from recharge.models import RechargeTransaction, DTHTransaction, ElectricityTransaction
+
+        history = []
+
+        # Mobile recharge
+        for t in RechargeTransaction.objects.filter(user=request.user):
+            history.append({
+                "type": "Mobile Recharge",
+                "number": t.mobile_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        # DTH
+        for t in DTHTransaction.objects.filter(user=request.user):
+            history.append({
+                "type": "DTH Recharge",
+                "number": t.customer_id,
+                "operator": t.operator_name,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        # Electricity
+        for t in ElectricityTransaction.objects.filter(user=request.user):
+            history.append({
+                "type": "Electricity Bill",
+                "number": t.consumer_number,
+                "biller": t.biller_name,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        # Wallet transactions
+        wallet = Wallet.objects.filter(user=request.user).first()
+        if wallet:
+            for t in wallet.transactions.all():
+                history.append({
+                    "type": t.get_category_display(),
+                    "amount": str(t.amount),
+                    "transaction_type": t.transaction_type,
+                    "description": t.description,
+                    "date": t.created_at,
+                })
+
+        # Sort all by date, newest first
+        history.sort(key=lambda x: x['date'], reverse=True)
+
+        return Response(history, status=status.HTTP_200_OK)

@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-import chargebee
 from datetime import timedelta
 
 load_dotenv()
@@ -25,12 +24,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-!h708#&f=@p^p2a3$jyp7tv+_0jp#ol_p!&-ws34m-omvdopm9'
-
+SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['ascendingly-superaffluent-mike.ngrok-free.dev', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -48,7 +46,6 @@ INSTALLED_APPS = [
     'users',
     'recharge',
     'wallet',
-    'ott',
     'rewards',
     'offers'
 ]
@@ -156,14 +153,22 @@ CORS_ALLOW_ALL_ORIGINS = True
 #     site=os.environ.get('CHARGEBEE_SITE')
 # )
 
-# import chargebee
-
-chargebee.api_key = os.getenv('CHARGEBEE_API_KEY')
-chargebee.site = os.getenv('CHARGEBEE_SITE')
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=365),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
 }
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+import cloudinary
+import cloudinary.uploader
+
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET'),
+    secure=True
+)

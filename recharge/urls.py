@@ -7,7 +7,19 @@ from .views import (
     RechargeStatusView,
     InspayBalanceView,
     RechargeHistoryView,
-    ActivePlanView
+    ActivePlanView,
+    InspayWebhookView,
+    DTHOperatorListView,
+    InitiateDTHRechargeView,
+    DTHHistoryView,
+    ElectricityBillerListView,
+    FetchElectricityBillView,
+    PayElectricityBillView,
+    ElectricityHistoryView,
+    FastagOperatorListView,
+    InitiateFastagRechargeView,
+    FastagHistoryView
+
 )
 
 urlpatterns = [
@@ -19,4 +31,15 @@ urlpatterns = [
     path('balance/', InspayBalanceView.as_view(), name='inspay-balance'),
     path('history/', RechargeHistoryView.as_view(), name='recharge-history'),
     path('active-plan/', ActivePlanView.as_view(), name='active-plan'),
+    path('webhook/', InspayWebhookView.as_view(), name='inspay-webhook'),
+    path('dth/operators/', DTHOperatorListView.as_view(), name='dth-operators'),
+    path('dth/initiate/', InitiateDTHRechargeView.as_view(), name='dth-initiate'),
+    path('dth/history/', DTHHistoryView.as_view(), name='dth-history'),
+    path('electricity/billers/', ElectricityBillerListView.as_view(), name='electricity-billers'),
+    path('electricity/fetch-bill/', FetchElectricityBillView.as_view(), name='electricity-fetch-bill'),
+    path('electricity/pay/', PayElectricityBillView.as_view(), name='electricity-pay'),
+    path('electricity/history/', ElectricityHistoryView.as_view(), name='electricity-history'),
+    path('fastag/operators/', FastagOperatorListView.as_view(), name='fastag-operators'),
+    path('fastag/initiate/', InitiateFastagRechargeView.as_view(), name='fastag-initiate'),
+    path('fastag/history/', FastagHistoryView.as_view(), name='fastag-history'),
 ]

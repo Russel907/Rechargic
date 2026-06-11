@@ -23,7 +23,6 @@ urlpatterns = [
     path('api/users/', include('users.urls')),
     path('api/recharge/', include('recharge.urls')),
     path('api/wallet/', include('wallet.urls')), 
-    path('api/ott/', include('ott.urls')),
     path('api/rewards/', include('rewards.urls')),
     path('api/offers/', include('offers.urls')),
 ]

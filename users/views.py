@@ -10,6 +10,12 @@ from .models import User, OTP
 from .serializers import SignupSerializer
 from .utils import send_otp_via_messagecentral
 
+from wallet.models import Wallet
+from rewards.models import RewardPoints
+
+import cloudinary
+import cloudinary.uploader
+
 OTP_TTL_SECONDS = 300          # OTP valid for 10 mins
 RESEND_COOLDOWN_SECONDS = 60   # Wait 60s before resend
 MAX_OTP_ATTEMPTS = 5           # 🔒 Max wrong tries per OTP
@@ -254,6 +260,8 @@ class VerifyOTPView(APIView):
         if user_exists:
             user = User.objects.get(phone=phone)
             tokens = get_tokens_for_user(user)
+            Wallet.objects.get_or_create(user=user)
+            RewardPoints.objects.get_or_create(user=user)
             return Response(
                 {
                     "message": "Login successful!",
@@ -273,6 +281,8 @@ class VerifyOTPView(APIView):
                 },
                 status=status.HTTP_200_OK
             )
+            Wallet.objects.get_or_create(user=user)
+            RewardPoints.objects.get_or_create(user=user)
 
 
 # --- All other views unchanged below ---
@@ -283,6 +293,9 @@ class SignupView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             tokens = get_tokens_for_user(user)
+            
+            Wallet.objects.get_or_create(user=user)
+            RewardPoints.objects.get_or_create(user=user)
             return Response(
                 {
                     "message": "Account created successfully!",
@@ -295,7 +308,6 @@ class SignupView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -305,6 +317,8 @@ class UserProfileView(APIView):
             {
                 "name": user.name,
                 "phone": user.phone,
+                "sim_operator": user.sim_operator,
+                "profile_pic": user.profile_pic,
                 "joined": user.created_at,
                 "referral_code": user.referral_code,
             },
@@ -314,12 +328,63 @@ class UserProfileView(APIView):
     def put(self, request):
         user = request.user
         name = request.data.get('name')
-        if not name:
-            return Response({"error": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
-        user.name = name
-        user.save()
-        return Response({"message": "Profile updated successfully!", "name": user.name, "phone": user.phone})
+        sim_operator = request.data.get('sim_operator')
+        profile_pic = request.FILES.get('profile_pic')
 
+        if name:
+            name = name.strip()
+            if not re.match(r'^[a-zA-Z\s]+$', name):
+                return Response(
+                    {"error": "Name should contain only letters."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            user.name = name
+
+        if sim_operator:
+            user.sim_operator = sim_operator.strip()
+
+        if profile_pic:
+            # Validate file type
+            allowed_types = ['image/jpeg', 'image/png', 'image/jpg']
+            if profile_pic.content_type not in allowed_types:
+                return Response(
+                    {"error": "Only JPG and PNG images allowed."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Validate file size — max 2MB
+            if profile_pic.size > 2 * 1024 * 1024:
+                return Response(
+                    {"error": "Image size must be under 2MB."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Upload to Cloudinary — image stored on their cloud permanently
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    profile_pic,
+                    folder="rechargic/profile_pics",
+                    public_id=f"user_{request.user.id}",
+                    overwrite=True,
+                    resource_type="image"
+                )
+                # Save only the URL in our database
+                user.profile_pic = upload_result['secure_url']
+            except Exception as e:
+                return Response(
+                    {"error": "Image upload failed. Please try again."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+        user.save()
+        return Response(
+            {
+                "message": "Profile updated successfully!",
+                "name": user.name,
+                "phone": user.phone,
+                "sim_operator": user.sim_operator,
+                "profile_pic": user.profile_pic,
+            },
+            status=status.HTTP_200_OK
+        )
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]

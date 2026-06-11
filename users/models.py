@@ -26,6 +26,12 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=15, unique=True)
     name = models.CharField(max_length=100)
+    sim_operator = models.CharField(max_length=50, null=True, blank=True)  # ADD
+    profile_pic = models.ImageField(
+        upload_to='profile_pics/',
+        null=True,
+        blank=True
+    )  # ADD
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -34,8 +40,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         'self', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='referrals'
     )
-
-    # 🔒 NEW: lockout fields
     failed_otp_attempts = models.IntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
 
