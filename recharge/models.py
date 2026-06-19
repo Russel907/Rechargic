@@ -160,3 +160,98 @@ class FastagTransaction(models.Model):
 
     def __str__(self):
         return f"{self.user.phone} - {self.vehicle_number} - ₹{self.amount} - {self.status}"
+
+class BroadbandTransaction(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failure', 'Failure'),
+    ]
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='broadband_transactions')
+    operator_code = models.CharField(max_length=20)
+    operator_name = models.CharField(max_length=100)
+    account_number = models.CharField(max_length=50)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    order_id = models.CharField(max_length=100, unique=True)
+    inspay_txid = models.CharField(max_length=100, null=True, blank=True)
+    inspay_opid = models.CharField(max_length=100, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    message = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.phone} - {self.account_number} - ₹{self.amount} - {self.status}"
+
+
+class LPGTransaction(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failure', 'Failure'),
+    ]
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='lpg_transactions')
+    operator_code = models.CharField(max_length=20)
+    operator_name = models.CharField(max_length=100)
+    consumer_number = models.CharField(max_length=50)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    order_id = models.CharField(max_length=100, unique=True)
+    inspay_txid = models.CharField(max_length=100, null=True, blank=True)
+    inspay_opid = models.CharField(max_length=100, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    message = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.phone} - {self.consumer_number} - ₹{self.amount} - {self.status}"
+
+
+class WaterTransaction(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failure', 'Failure'),
+    ]
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='water_transactions')
+    biller_code = models.CharField(max_length=20)
+    biller_name = models.CharField(max_length=100)
+    consumer_number = models.CharField(max_length=50)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    order_id = models.CharField(max_length=100, unique=True)
+    inspay_txid = models.CharField(max_length=100, null=True, blank=True)
+    inspay_opid = models.CharField(max_length=100, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    message = models.CharField(max_length=255, null=True, blank=True)
+    customer_name = models.CharField(max_length=100, null=True, blank=True)
+    bill_amount = models.CharField(max_length=20, null=True, blank=True)
+    due_date = models.CharField(max_length=50, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.phone} - {self.consumer_number} - ₹{self.amount} - {self.status}"
+
+
+class InsuranceTransaction(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failure', 'Failure'),
+    ]
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='insurance_transactions')
+    provider_code = models.CharField(max_length=20)
+    provider_name = models.CharField(max_length=100)
+    policy_number = models.CharField(max_length=50)
+    mobile = models.CharField(max_length=15)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    order_id = models.CharField(max_length=100, unique=True)
+    inspay_txid = models.CharField(max_length=100, null=True, blank=True)
+    inspay_opid = models.CharField(max_length=100, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    message = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.phone} - {self.policy_number} - ₹{self.amount} - {self.status}"

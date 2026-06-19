@@ -321,6 +321,8 @@ class UserProfileView(APIView):
                 "profile_pic": user.profile_pic,
                 "joined": user.created_at,
                 "referral_code": user.referral_code,
+                "kyc_status": user.kyc_status,
+                "startup_auth_enabled": user.startup_auth_enabled,
             },
             status=status.HTTP_200_OK
         )
@@ -330,6 +332,7 @@ class UserProfileView(APIView):
         name = request.data.get('name')
         sim_operator = request.data.get('sim_operator')
         profile_pic = request.FILES.get('profile_pic')
+        startup_auth_enabled = request.data.get('startup_auth_enabled')
 
         if name:
             name = name.strip()
@@ -343,21 +346,25 @@ class UserProfileView(APIView):
         if sim_operator:
             user.sim_operator = sim_operator.strip()
 
+        # Startup auth toggle
+        if startup_auth_enabled is not None:
+            if str(startup_auth_enabled).lower() in ['true', '1']:
+                user.startup_auth_enabled = True
+            else:
+                user.startup_auth_enabled = False
+
         if profile_pic:
-            # Validate file type
             allowed_types = ['image/jpeg', 'image/png', 'image/jpg']
             if profile_pic.content_type not in allowed_types:
                 return Response(
                     {"error": "Only JPG and PNG images allowed."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            # Validate file size — max 2MB
             if profile_pic.size > 2 * 1024 * 1024:
                 return Response(
                     {"error": "Image size must be under 2MB."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            # Upload to Cloudinary — image stored on their cloud permanently
             try:
                 upload_result = cloudinary.uploader.upload(
                     profile_pic,
@@ -366,7 +373,6 @@ class UserProfileView(APIView):
                     overwrite=True,
                     resource_type="image"
                 )
-                # Save only the URL in our database
                 user.profile_pic = upload_result['secure_url']
             except Exception as e:
                 return Response(
@@ -382,6 +388,8 @@ class UserProfileView(APIView):
                 "phone": user.phone,
                 "sim_operator": user.sim_operator,
                 "profile_pic": user.profile_pic,
+                "kyc_status": user.kyc_status,
+                "startup_auth_enabled": user.startup_auth_enabled,
             },
             status=status.HTTP_200_OK
         )
@@ -425,4 +433,182 @@ class ReferralView(APIView):
                     for r in referrals
                 ]
             }
+        )
+
+class KYCView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Get current KYC status
+        return Response(
+            {
+                "kyc_status": request.user.kyc_status,
+                "message": self._get_kyc_message(request.user.kyc_status)
+            },
+            status=status.HTTP_200_OK
+        )
+
+    def post(self, request):
+        # User submits KYC
+        user = request.user
+
+        if user.kyc_status == 'approved':
+            return Response(
+                {"error": "KYC already approved."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if user.kyc_status == 'submitted':
+            return Response(
+                {"error": "KYC already submitted. Please wait for approval."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update status to submitted
+        user.kyc_status = 'submitted'
+        user.save()
+
+        return Response(
+            {
+                "message": "KYC submitted successfully. Approval takes 24-48 hours.",
+                "kyc_status": user.kyc_status
+            },
+            status=status.HTTP_200_OK
+        )
+
+    def _get_kyc_message(self, status):
+        messages = {
+            'pending': 'KYC not submitted. Please complete KYC for full access.',
+            'submitted': 'KYC under review. Approval takes 24-48 hours.',
+            'approved': 'KYC approved. Full access granted.',
+            'rejected': 'KYC rejected. Please resubmit with correct documents.',
+        }
+        return messages.get(status, '')
+
+class HomeScreenView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Wallet balance
+        from wallet.models import Wallet
+        wallet, _ = Wallet.objects.get_or_create(user=user)
+
+        # Last 5 transactions across all services
+        from recharge.models import RechargeTransaction, DTHTransaction, ElectricityTransaction, FastagTransaction, BroadbandTransaction, LPGTransaction, WaterTransaction, InsuranceTransaction
+
+        recent = []
+
+        for t in RechargeTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "Mobile Recharge",
+                "number": t.mobile_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        for t in DTHTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "DTH Recharge",
+                "number": t.customer_id,
+                "operator": t.operator_name,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        for t in ElectricityTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "Electricity Bill",
+                "number": t.consumer_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        for t in FastagTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "Fastag",
+                "number": t.vehicle_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        for t in BroadbandTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "Broadband",
+                "number": t.account_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        for t in LPGTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "LPG Gas",
+                "number": t.consumer_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        for t in WaterTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "Water Bill",
+                "number": t.consumer_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        for t in InsuranceTransaction.objects.filter(user=user).order_by('-created_at')[:5]:
+            recent.append({
+                "type": "Insurance",
+                "number": t.policy_number,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+
+        # Sort all by date newest first, take top 5
+        recent.sort(key=lambda x: x['date'], reverse=True)
+        recent = recent[:5]
+
+        # Last successful recharge for plan details banner
+        last_recharge = RechargeTransaction.objects.filter(
+            user=user,
+            status='success'
+        ).order_by('-created_at').first()
+
+        return Response(
+            {
+                "user": {
+                    "name": user.name,
+                    "phone": user.phone,
+                    "profile_pic": user.profile_pic,
+                    "kyc_status": user.kyc_status,
+                },
+                "wallet": {
+                    "balance": str(wallet.balance),
+                },
+                "last_recharge": {
+                    "mobile_number": last_recharge.mobile_number if last_recharge else None,
+                    "amount": str(last_recharge.amount) if last_recharge else None,
+                    "operator": last_recharge.operator.name if last_recharge and last_recharge.operator else None,
+                    "date": last_recharge.created_at if last_recharge else None,
+                } if last_recharge else None,
+                "recent_transactions": recent,
+            },
+            status=status.HTTP_200_OK
         )

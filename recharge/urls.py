@@ -18,8 +18,19 @@ from .views import (
     ElectricityHistoryView,
     FastagOperatorListView,
     InitiateFastagRechargeView,
-    FastagHistoryView
-
+    FastagHistoryView,
+    BroadbandOperatorListView,
+    InitiateBroadbandRechargeView,
+    BroadbandHistoryView,
+    LPGOperatorListView,
+    InitiateLPGRechargeView,
+    LPGHistoryView,
+    WaterBillerListView,
+    PayWaterBillView,
+    WaterHistoryView,
+    InsuranceProviderListView,
+    PayInsurancePremiumView,
+    InsuranceHistoryView,
 )
 
 urlpatterns = [
@@ -42,4 +53,16 @@ urlpatterns = [
     path('fastag/operators/', FastagOperatorListView.as_view(), name='fastag-operators'),
     path('fastag/initiate/', InitiateFastagRechargeView.as_view(), name='fastag-initiate'),
     path('fastag/history/', FastagHistoryView.as_view(), name='fastag-history'),
+    path('broadband/operators/', BroadbandOperatorListView.as_view(), name='broadband-operators'),
+    path('broadband/initiate/', InitiateBroadbandRechargeView.as_view(), name='broadband-initiate'),
+    path('broadband/history/', BroadbandHistoryView.as_view(), name='broadband-history'),
+    path('lpg/operators/', LPGOperatorListView.as_view(), name='lpg-operators'),
+    path('lpg/initiate/', InitiateLPGRechargeView.as_view(), name='lpg-initiate'),
+    path('lpg/history/', LPGHistoryView.as_view(), name='lpg-history'),
+    path('water/billers/', WaterBillerListView.as_view(), name='water-billers'),
+    path('water/pay/', PayWaterBillView.as_view(), name='water-pay'),
+    path('water/history/', WaterHistoryView.as_view(), name='water-history'),
+    path('insurance/providers/', InsuranceProviderListView.as_view(), name='insurance-providers'),
+    path('insurance/pay/', PayInsurancePremiumView.as_view(), name='insurance-pay'),
+    path('insurance/history/', InsuranceHistoryView.as_view(), name='insurance-history'),
 ]

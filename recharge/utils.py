@@ -86,33 +86,33 @@ def check_inspay_balance():
         return False, {"error": str(e)}
 
 
-def fetch_electricity_bill(opcode, consumer_number, mobile, order_id):
-    """
-    Fetch electricity bill details before payment.
-    Uses same recharge API — Inspay handles fetch internally for supported billers.
-    """
-    params = {
-        'username': INSPAY_USERNAME,
-        'token': INSPAY_TOKEN,
-        'opcode': str(opcode).strip(),
-        'number': str(consumer_number).strip(),
-        'amount': 0,
-        'orderid': str(order_id).strip(),
-        'value1': str(mobile).strip(),
-        'format': 'json'
-    }
+# def fetch_electricity_bill(opcode, consumer_number, mobile, order_id):
+#     """
+#     Fetch electricity bill details before payment.
+#     Uses same recharge API — Inspay handles fetch internally for supported billers.
+#     """
+#     params = {
+#         'username': INSPAY_USERNAME,
+#         'token': INSPAY_TOKEN,
+#         'opcode': str(opcode).strip(),
+#         'number': str(consumer_number).strip(),
+#         'amount': 0,
+#         'orderid': str(order_id).strip(),
+#         'value1': str(mobile).strip(),
+#         'format': 'json'
+#     }
 
-    try:
-        response = requests.get(
-            f"{INSPAY_BASE_URL}/v3/recharge/api",
-            params=params,
-            timeout=30
-        )
-        logger.info(f"Inspay electricity fetch response: {response.status_code} - {response.text}")
-        if response.status_code == 200:
-            return True, response.json()
-        else:
-            return False, {"error": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
-        logger.exception(f"Inspay electricity fetch error: {str(e)}")
-        return False, {"error": str(e)}
+#     try:
+#         response = requests.get(
+#             f"{INSPAY_BASE_URL}/v3/recharge/api",
+#             params=params,
+#             timeout=30
+#         )
+#         logger.info(f"Inspay electricity fetch response: {response.status_code} - {response.text}")
+#         if response.status_code == 200:
+#             return True, response.json()
+#         else:
+#             return False, {"error": f"HTTP {response.status_code}"}
+#     except requests.RequestException as e:
+#         logger.exception(f"Inspay electricity fetch error: {str(e)}")
+#         return False, {"error": str(e)}

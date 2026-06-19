@@ -6,6 +6,12 @@ from django.db import transaction
 from decimal import Decimal
 from .models import Wallet, Transaction
 from .serializers import WalletSerializer, AddMoneySerializer, TransactionSerializer
+from recharge.models import (
+    RechargeTransaction, DTHTransaction,
+    ElectricityTransaction, FastagTransaction,
+    BroadbandTransaction, LPGTransaction,
+    WaterTransaction, InsuranceTransaction
+)
 
 class WalletView(APIView):
     permission_classes = [IsAuthenticated]
@@ -204,3 +210,50 @@ class UnifiedHistoryView(APIView):
         history.sort(key=lambda x: x['date'], reverse=True)
 
         return Response(history, status=status.HTTP_200_OK)
+        # Broadband
+        for t in BroadbandTransaction.objects.filter(user=request.user):
+            history.append({
+                "type": "Broadband Bill",
+                "number": t.account_number,
+                "operator": t.operator_name,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+            
+        # LPG
+        for t in LPGTransaction.objects.filter(user=request.user):
+            history.append({
+                "type": "LPG Gas",
+                "number": t.consumer_number,
+                "operator": t.operator_name,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+                
+        # Water
+        for t in WaterTransaction.objects.filter(user=request.user):
+            history.append({
+                "type": "Water Bill",
+                "number": t.consumer_number,
+                "biller": t.biller_name,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })
+        
+        # Insurance
+        for t in InsuranceTransaction.objects.filter(user=request.user):
+            history.append({
+                "type": "Insurance Premium",
+                "number": t.policy_number,
+                "provider": t.provider_name,
+                "amount": str(t.amount),
+                "status": t.status,
+                "order_id": t.order_id,
+                "date": t.created_at,
+            })

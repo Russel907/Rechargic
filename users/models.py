@@ -4,7 +4,6 @@ from django.utils import timezone
 from datetime import timedelta
 import uuid
 
-
 class UserManager(BaseUserManager):
     def create_user(self, phone, name, password=None):
         if not phone:
@@ -26,12 +25,23 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=15, unique=True)
     name = models.CharField(max_length=100)
-    sim_operator = models.CharField(max_length=50, null=True, blank=True)  # ADD
-    profile_pic = models.ImageField(
-        upload_to='profile_pics/',
-        null=True,
-        blank=True
-    )  # ADD
+    profile_pic = models.URLField(max_length=500, null=True, blank=True)
+    sim_operator = models.CharField(max_length=50, null=True, blank=True)
+    # KYC
+    KYC_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('submitted', 'Submitted'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    kyc_status = models.CharField(
+        max_length=10,
+        choices=KYC_STATUS_CHOICES,
+        default='pending'
+    )
+    
+    # Startup Authentication toggle
+    startup_auth_enabled = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -73,3 +83,6 @@ class OTP(models.Model):
 
     def __str__(self):
         return f"{self.phone} - {self.otp_code}"
+
+
+  
