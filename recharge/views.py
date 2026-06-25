@@ -364,8 +364,6 @@ class InspayWebhookView(APIView):
                 ft_txn.save()
             return Response({"message": "OK"}, status=200)
 
-        return Response({"message": "OK"}, status=200)
-
         # Broadband
         bb_txn = BroadbandTransaction.objects.filter(order_id=order_id).first()
         if bb_txn and bb_txn.status == 'pending':
@@ -379,44 +377,46 @@ class InspayWebhookView(APIView):
                 bb_txn.save()
             return Response({"message": "OK"}, status=200)
 
-            # LPG
-            lpg_txn = LPGTransaction.objects.filter(order_id=order_id).first()
-            if lpg_txn and lpg_txn.status == 'pending':
-                if status_val == 'Success':
-                    lpg_txn.status = 'success'
-                    lpg_txn.inspay_opid = opid
-                    lpg_txn.save()
-                    award_recharge_points(lpg_txn.user, lpg_txn.amount)
+        # LPG
+        lpg_txn = LPGTransaction.objects.filter(order_id=order_id).first()
+        if lpg_txn and lpg_txn.status == 'pending':
+            if status_val == 'Success':
+                lpg_txn.status = 'success'
+                lpg_txn.inspay_opid = opid
+                lpg_txn.save()
+                award_recharge_points(lpg_txn.user, lpg_txn.amount)
             elif status_val == 'Failure':
                 lpg_txn.status = 'failure'
                 lpg_txn.save()
             return Response({"message": "OK"}, status=200)
-            
-            # Water
-            wt_txn = WaterTransaction.objects.filter(order_id=order_id).first()
-            if wt_txn and wt_txn.status == 'pending':
-                if status_val == 'Success':
-                    wt_txn.status = 'success'
-                    wt_txn.inspay_opid = opid
-                    wt_txn.save()
-                    award_recharge_points(wt_txn.user, wt_txn.amount)
-                elif status_val == 'Failure':
-                    wt_txn.status = 'failure'
-                    wt_txn.save()
-                return Response({"message": "OK"}, status=200)
-                
-            # Insurance
-            ins_txn = InsuranceTransaction.objects.filter(order_id=order_id).first()
-            if ins_txn and ins_txn.status == 'pending':
-                if status_val == 'Success':
-                    ins_txn.status = 'success'
-                    ins_txn.inspay_opid = opid
-                    ins_txn.save()
-                    award_recharge_points(ins_txn.user, ins_txn.amount)
-                elif status_val == 'Failure':
-                    ins_txn.status = 'failure'
-                    ins_txn.save()
-                return Response({"message": "OK"}, status=200)
+
+        # Water
+        wt_txn = WaterTransaction.objects.filter(order_id=order_id).first()
+        if wt_txn and wt_txn.status == 'pending':
+            if status_val == 'Success':
+                wt_txn.status = 'success'
+                wt_txn.inspay_opid = opid
+                wt_txn.save()
+                award_recharge_points(wt_txn.user, wt_txn.amount)
+            elif status_val == 'Failure':
+                wt_txn.status = 'failure'
+                wt_txn.save()
+            return Response({"message": "OK"}, status=200)
+
+        # Insurance
+        ins_txn = InsuranceTransaction.objects.filter(order_id=order_id).first()
+        if ins_txn and ins_txn.status == 'pending':
+            if status_val == 'Success':
+                ins_txn.status = 'success'
+                ins_txn.inspay_opid = opid
+                ins_txn.save()
+                award_recharge_points(ins_txn.user, ins_txn.amount)
+            elif status_val == 'Failure':
+                ins_txn.status = 'failure'
+                ins_txn.save()
+            return Response({"message": "OK"}, status=200)
+
+        return Response({"message": "OK"}, status=200)
 
 DTH_OPERATORS = {
     'ATV': 'Airtel DTH',
@@ -514,7 +514,7 @@ class InitiateDTHRechargeView(APIView):
 
         if inspay_status == 'Success':
             dth_txn.status = 'success'
-            award_recharge_points(request.user, amount)
+            # award_recharge_points(request.user, amount)
         elif inspay_status == 'Failure':
             dth_txn.status = 'failure'
         else:

@@ -281,8 +281,8 @@ class VerifyOTPView(APIView):
                 },
                 status=status.HTTP_200_OK
             )
-            Wallet.objects.get_or_create(user=user)
-            RewardPoints.objects.get_or_create(user=user)
+            # Wallet.objects.get_or_create(user=user)
+            # RewardPoints.objects.get_or_create(user=user)
 
 
 # --- All other views unchanged below ---
