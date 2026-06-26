@@ -104,7 +104,7 @@ class SendOTPView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        otp_obj = OTP.objects.create(phone=phone, otp_code="mc_generated")
+        otp_obj = OTP.objects.create(phone=phone, otp_code="6543")
 
         data = provider_resp.get("data") if isinstance(provider_resp, dict) else None
         if data:
