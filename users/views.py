@@ -333,7 +333,7 @@ class UserProfileView(APIView):
         sim_operator = request.data.get('sim_operator')
         profile_pic = request.FILES.get('profile_pic')
         startup_auth_enabled = request.data.get('startup_auth_enabled')
-
+        
         if name:
             name = name.strip()
             if not re.match(r'^[a-zA-Z\s]+$', name):
@@ -342,17 +342,16 @@ class UserProfileView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             user.name = name
-
+            
         if sim_operator:
             user.sim_operator = sim_operator.strip()
-
-        # Startup auth toggle
+            
         if startup_auth_enabled is not None:
             if str(startup_auth_enabled).lower() in ['true', '1']:
                 user.startup_auth_enabled = True
             else:
                 user.startup_auth_enabled = False
-
+                
         if profile_pic:
             allowed_types = ['image/jpeg', 'image/png', 'image/jpg']
             if profile_pic.content_type not in allowed_types:
@@ -379,7 +378,7 @@ class UserProfileView(APIView):
                     {"error": "Image upload failed. Please try again."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-
+        # ← this was missing / unreachable before
         user.save()
         return Response(
             {
@@ -391,6 +390,29 @@ class UserProfileView(APIView):
                 "kyc_status": user.kyc_status,
                 "startup_auth_enabled": user.startup_auth_enabled,
             },
+            status=status.HTTP_200_OK
+        )
+    
+    def delete(self, request):
+        user = request.user
+        
+        if not user.profile_pic:
+            return Response(
+                {"error": "No profile picture to delete."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            public_id = f"rechargic/profile_pics/user_{user.id}"
+            cloudinary.uploader.destroy(public_id)
+        except Exception:
+            pass
+        
+        user.profile_pic = None
+        user.save()
+        
+        return Response(
+            {"message": "Profile picture removed successfully."},
             status=status.HTTP_200_OK
         )
 

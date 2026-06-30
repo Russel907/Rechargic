@@ -31,6 +31,7 @@ from .views import (
     InsuranceProviderListView,
     PayInsurancePremiumView,
     InsuranceHistoryView,
+    DTHPlanListView
 )
 
 urlpatterns = [
@@ -65,4 +66,5 @@ urlpatterns = [
     path('insurance/providers/', InsuranceProviderListView.as_view(), name='insurance-providers'),
     path('insurance/pay/', PayInsurancePremiumView.as_view(), name='insurance-pay'),
     path('insurance/history/', InsuranceHistoryView.as_view(), name='insurance-history'),
+    path('dth/plans/', DTHPlanListView.as_view(), name='dth-plans'),
 ]

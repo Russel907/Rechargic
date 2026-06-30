@@ -21,17 +21,17 @@ class Command(BaseCommand):
         operators = [
             {
                 "name": "Jio",
-                "code": "JIO",
+                "code": "RC",
                 "logo": "https://res.cloudinary.com/dusncgt6b/image/upload/v1782726746/jio-logo-icon_dx9vm0.png",
             },
             {
                 "name": "Airtel",
-                "code": "AT",
+                "code": "A",
                 "logo": "https://res.cloudinary.com/dusncgt6b/image/upload/v1782726746/airtel-logo-icon_ly4oa4.png",
             },
             {
                 "name": "Vi (Vodafone Idea)",
-                "code": "VI",
+                "code": "VIL",
                 "logo": "https://res.cloudinary.com/dusncgt6b/image/upload/v1782726746/vi-mobile-icon_vagbcz.png",
             },
             {

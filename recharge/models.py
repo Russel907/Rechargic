@@ -255,3 +255,28 @@ class InsuranceTransaction(models.Model):
 
     def __str__(self):
         return f"{self.user.phone} - {self.policy_number} - ₹{self.amount} - {self.status}"
+
+class DTHPlan(models.Model):
+    CATEGORY_CHOICES = [
+        ('hindi', 'Hindi'),
+        ('regional', 'Regional'),
+        ('sports', 'Sports'),
+        ('hd', 'HD'),
+        ('combo', 'Combo'),
+        ('ott', 'OTT'),
+        ('basic', 'Basic'),
+    ]
+
+    operator_code = models.CharField(max_length=20)   # ATV, DTV, STV, TTV, VTV
+    operator_name = models.CharField(max_length=100)
+    plan_name = models.CharField(max_length=150)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    validity = models.CharField(max_length=50)
+    channels = models.CharField(max_length=50, null=True, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    is_active = models.BooleanField(default=True)
+    is_trending = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.operator_name} - {self.plan_name} - ₹{self.price}"

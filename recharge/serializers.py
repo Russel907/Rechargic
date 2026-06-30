@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Operator, Circle, Plan
+from .models import Operator, Circle, Plan, DTHPlan
 
 
 class OperatorSerializer(serializers.ModelSerializer):
@@ -7,6 +7,10 @@ class OperatorSerializer(serializers.ModelSerializer):
         model = Operator
         fields = ['id', 'name', 'code', 'logo']
 
+class DTHPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DTHPlan
+        fields = ['id', 'operator_code', 'operator_name', 'plan_name', 'price', 'validity', 'channels', 'category', 'is_trending']
 
 class CircleSerializer(serializers.ModelSerializer):
     class Meta:

@@ -19,6 +19,8 @@ from .models import (
     BroadbandTransaction, LPGTransaction,
     WaterTransaction, InsuranceTransaction
 )
+from .models import DTHPlan
+from .serializers import DTHPlanSerializer
 
 def award_recharge_points(user, amount):
     from rewards.models import RewardPoints, RewardTransaction
@@ -1323,3 +1325,20 @@ class InsuranceHistoryView(APIView):
             "status": t.status,
             "created_at": t.created_at,
         } for t in transactions], status=status.HTTP_200_OK)
+
+class DTHPlanListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        opcode = request.query_params.get('opcode')
+        category = request.query_params.get('category')
+
+        plans = DTHPlan.objects.filter(is_active=True)
+
+        if opcode:
+            plans = plans.filter(operator_code=opcode)
+        if category:
+            plans = plans.filter(category=category)
+
+        serializer = DTHPlanSerializer(plans, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
