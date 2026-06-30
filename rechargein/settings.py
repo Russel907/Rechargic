@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     'recharge',
     'wallet',
     'rewards',
-    'offers'
+    'offers',
+    'legal'
 ]
 
 MIDDLEWARE = [
