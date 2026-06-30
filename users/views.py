@@ -21,7 +21,8 @@ RESEND_COOLDOWN_SECONDS = 60   # Wait 60s before resend
 MAX_OTP_ATTEMPTS = 5           # 🔒 Max wrong tries per OTP
 MAX_OTP_PER_DAY = 20        # high for testing  - change to 5 while production        # 🔒 Max OTPs a phone can request per day
 LOCKOUT_DURATION_MINUTES = 2  # change to 30 before going live
-
+DEMO_PHONE_NUMBER = "9999999999"   # pick any number, tell app store reviewers this
+DEMO_OTP = "1234"  
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -45,6 +46,12 @@ class SendOTPView(APIView):
             return Response(
                 {"error": "Phone number must be exactly 10 digits."},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+        if phone == DEMO_PHONE_NUMBER:
+            OTP.objects.create(phone=phone, otp_code=DEMO_OTP)
+            return Response(
+                {"message": "OTP sent successfully.", "expires_in": "5 minutes"},
+                status=status.HTTP_200_OK
             )
 
         # 🔒 Check if account is locked
@@ -131,7 +138,37 @@ class VerifyOTPView(APIView):
                 {"error": "Phone and OTP are required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        # 🟢 DEMO USER BYPASS — skip MessageCentral verification entirely
+        if phone == DEMO_PHONE_NUMBER:
+            if otp_code != DEMO_OTP:
+                return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+            otp = OTP.objects.filter(phone=phone, is_used=False).order_by('-created_at').first()
+            if otp:
+                otp.is_used = True
+                otp.save()
 
+            user_exists = User.objects.filter(phone=phone).exists()
+
+            if user_exists:
+                user = User.objects.get(phone=phone)
+            else:
+                user = User.objects.create_user(phone=phone, name="Demo User")
+
+            Wallet.objects.get_or_create(user=user)
+            RewardPoints.objects.get_or_create(user=user)
+            tokens = get_tokens_for_user(user)
+
+            return Response(
+                {
+                    "message": "Login successful!",
+                    "is_new_user": not user_exists,
+                    "name": user.name,
+                    "phone": user.phone,
+                    "tokens": tokens
+                },
+                status=status.HTTP_200_OK
+            )
+              
         # 🔒 Check account lockout
         user = User.objects.filter(phone=phone).first()
         if user and user.is_locked():

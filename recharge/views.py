@@ -178,6 +178,18 @@ class InitiateRechargeView(APIView):
             recharge_txn.status = 'failure'
         else:
             recharge_txn.status = 'pending'
+            recharge_txn.save()
+            import time
+            time.sleep(3)  # give Inspay a moment to finalize
+
+            status_ok, status_response = check_recharge_status(order_id)
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    recharge_txn.status = 'success'
+                    recharge_txn.inspay_txid = status_response.get('txid', recharge_txn.inspay_txid)
+                elif final_status == 'Failure':
+                    recharge_txn.status = 'failure'
 
         recharge_txn.save()
 
@@ -521,7 +533,19 @@ class InitiateDTHRechargeView(APIView):
             dth_txn.status = 'failure'
         else:
             dth_txn.status = 'pending'
+            dth_txn.save()
 
+            import time
+            time.sleep(3)  # give Inspay a moment to finalize
+
+            status_ok, status_response = check_recharge_status(order_id)
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    dth_txn.status = 'success'
+                    dth_txn.inspay_txid = status_response.get('txid', dth_txn.inspay_txid)
+                elif final_status == 'Failure':
+                    dth_txn.status = 'failure'
         dth_txn.save()
 
         return Response(
@@ -714,9 +738,21 @@ class PayElectricityBillView(APIView):
             elec_txn.status = 'failure'
         else:
             elec_txn.status = 'pending'
+            elec_txn.save()
 
+            import time
+            time.sleep(3)
+
+            status_ok, status_response = check_recharge_status(order_id)   # ← fixed, was check_elec_status
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    elec_txn.status = 'success'
+                    elec_txn.inspay_txid = status_response.get('txid', elec_txn.inspay_txid)
+                elif final_status == 'Failure':
+                    elec_txn.status = 'failure'
         elec_txn.save()
-
+        
         return Response(
             {
                 "message": response.get('message'),
@@ -868,7 +904,19 @@ class InitiateFastagRechargeView(APIView):
             fastag_txn.status = 'failure'
         else:
             fastag_txn.status = 'pending'
+            fastag_txn.save()
 
+            import time
+            time.sleep(3)
+
+            status_ok, status_response = check_recharge_status(order_id)   # ← fixed, was check_fastag_status
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    fastag_txn.status = 'success'
+                    fastag_txn.inspay_txid = status_response.get('txid', fastag_txn.inspay_txid)
+                elif final_status == 'Failure':
+                    fastag_txn.status = 'failure'
         fastag_txn.save()
 
         return Response(
@@ -1017,7 +1065,26 @@ class InitiateBroadbandRechargeView(APIView):
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
         txn.message = response.get('message')
-        txn.status = 'success' if inspay_status == 'Success' else 'failure' if inspay_status == 'Failure' else 'pending'
+
+        if inspay_status == 'Success':
+            txn.status = 'success'
+        elif inspay_status == 'Failure':
+            txn.status = 'failure'
+        else:
+            txn.status = 'pending'
+            txn.save()
+
+            import time
+            time.sleep(3)
+
+            status_ok, status_response = check_recharge_status(order_id)
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    txn.status = 'success'
+                    txn.inspay_txid = status_response.get('txid', txn.inspay_txid)
+                elif final_status == 'Failure':
+                    txn.status = 'failure'
         txn.save()
 
         return Response({
@@ -1109,7 +1176,26 @@ class InitiateLPGRechargeView(APIView):
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
         txn.message = response.get('message')
-        txn.status = 'success' if inspay_status == 'Success' else 'failure' if inspay_status == 'Failure' else 'pending'
+
+        if inspay_status == 'Success':
+            txn.status = 'success'
+        elif inspay_status == 'Failure':
+            txn.status = 'failure'
+        else:
+            txn.status = 'pending'
+            txn.save()
+
+            import time
+            time.sleep(3)
+
+            status_ok, status_response = check_recharge_status(order_id)
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    txn.status = 'success'
+                    txn.inspay_txid = status_response.get('txid', txn.inspay_txid)
+                elif final_status == 'Failure':
+                    txn.status = 'failure'
         txn.save()
 
         return Response({
@@ -1203,7 +1289,26 @@ class PayWaterBillView(APIView):
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
         txn.message = response.get('message')
-        txn.status = 'success' if inspay_status == 'Success' else 'failure' if inspay_status == 'Failure' else 'pending'
+
+        if inspay_status == 'Success':
+            txn.status = 'success'
+        elif inspay_status == 'Failure':
+            txn.status = 'failure'
+        else:
+            txn.status = 'pending'
+            txn.save()
+
+            import time
+            time.sleep(3)
+
+            status_ok, status_response = check_recharge_status(order_id)
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    txn.status = 'success'
+                    txn.inspay_txid = status_response.get('txid', txn.inspay_txid)
+                elif final_status == 'Failure':
+                    txn.status = 'failure'
         txn.save()
 
         return Response({
@@ -1298,7 +1403,26 @@ class PayInsurancePremiumView(APIView):
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
         txn.message = response.get('message')
-        txn.status = 'success' if inspay_status == 'Success' else 'failure' if inspay_status == 'Failure' else 'pending'
+
+        if inspay_status == 'Success':
+            txn.status = 'success'
+        elif inspay_status == 'Failure':
+            txn.status = 'failure'
+        else:
+            txn.status = 'pending'
+            txn.save()
+
+            import time
+            time.sleep(3)
+
+            status_ok, status_response = check_recharge_status(order_id)
+            if status_ok:
+                final_status = status_response.get('status', 'Pending')
+                if final_status == 'Success':
+                    txn.status = 'success'
+                    txn.inspay_txid = status_response.get('txid', txn.inspay_txid)
+                elif final_status == 'Failure':
+                    txn.status = 'failure'
         txn.save()
 
         return Response({
