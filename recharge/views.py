@@ -205,6 +205,52 @@ class InitiateRechargeView(APIView):
             status=status.HTTP_200_OK
         )
 
+# class RechargeStatusView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         order_id = request.query_params.get('order_id')
+
+#         if not order_id:
+#             return Response(
+#                 {"error": "order_id is required."},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         # Check in our DB first
+#         try:
+#             txn = RechargeTransaction.objects.get(
+#                 order_id=order_id,
+#                 user=request.user
+#             )
+#         except RechargeTransaction.DoesNotExist:
+#             return Response(
+#                 {"error": "Transaction not found."},
+#                 status=status.HTTP_404_NOT_FOUND
+#             )
+
+#         # If pending check InsPay for latest status
+#         if txn.status == 'pending':
+#             ok, response = check_recharge_status(order_id)
+#             if ok:
+#                 inspay_status = response.get('status', 'Pending')
+#                 if inspay_status == 'Success':
+#                     txn.status = 'success'
+#                 elif inspay_status == 'Failure':
+#                     txn.status = 'failure'
+#                 txn.save()
+
+#         return Response(
+#             {
+#                 "order_id": txn.order_id,
+#                 "mobile_number": txn.mobile_number,
+#                 "amount": txn.amount,
+#                 "status": txn.status,
+#                 "message": txn.message,
+#                 "created_at": txn.created_at
+#             },
+#             status=status.HTTP_200_OK
+#         )
 class RechargeStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -217,39 +263,225 @@ class RechargeStatusView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check in our DB first
-        try:
-            txn = RechargeTransaction.objects.get(
-                order_id=order_id,
-                user=request.user
-            )
-        except RechargeTransaction.DoesNotExist:
-            return Response(
-                {"error": "Transaction not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        # Determine transaction type from order_id prefix
+        # RC = Mobile, DTH = DTH, ELEC = Electricity, FT = Fastag
+        # BB = Broadband, LPG = LPG, WT = Water, INS = Insurance
 
-        # If pending check InsPay for latest status
-        if txn.status == 'pending':
-            ok, response = check_recharge_status(order_id)
-            if ok:
-                inspay_status = response.get('status', 'Pending')
-                if inspay_status == 'Success':
-                    txn.status = 'success'
-                elif inspay_status == 'Failure':
-                    txn.status = 'failure'
-                txn.save()
+        txn_data = None
+
+        # Mobile recharge
+        if order_id.startswith('RC'):
+            try:
+                txn = RechargeTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "Mobile Recharge",
+                    "number": txn.mobile_number,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except RechargeTransaction.DoesNotExist:
+                pass
+
+        # DTH
+        elif order_id.startswith('DTH'):
+            try:
+                txn = DTHTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "DTH Recharge",
+                    "number": txn.customer_id,
+                    "operator": txn.operator_name,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except DTHTransaction.DoesNotExist:
+                pass
+
+        # Electricity
+        elif order_id.startswith('ELEC'):
+            try:
+                txn = ElectricityTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "Electricity Bill",
+                    "number": txn.consumer_number,
+                    "biller": txn.biller_name,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except ElectricityTransaction.DoesNotExist:
+                pass
+
+        # Fastag
+        elif order_id.startswith('FT'):
+            try:
+                txn = FastagTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "Fastag",
+                    "number": txn.vehicle_number,
+                    "operator": txn.operator_name,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except FastagTransaction.DoesNotExist:
+                pass
+
+        # Broadband
+        elif order_id.startswith('BB'):
+            try:
+                txn = BroadbandTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "Broadband",
+                    "number": txn.account_number,
+                    "operator": txn.operator_name,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except BroadbandTransaction.DoesNotExist:
+                pass
+
+        # LPG
+        elif order_id.startswith('LPG'):
+            try:
+                txn = LPGTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "LPG Gas",
+                    "number": txn.consumer_number,
+                    "operator": txn.operator_name,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except LPGTransaction.DoesNotExist:
+                pass
+
+        # Water
+        elif order_id.startswith('WT'):
+            try:
+                txn = WaterTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "Water Bill",
+                    "number": txn.consumer_number,
+                    "biller": txn.biller_name,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except WaterTransaction.DoesNotExist:
+                pass
+
+        # Insurance
+        elif order_id.startswith('INS'):
+            try:
+                txn = InsuranceTransaction.objects.get(order_id=order_id, user=request.user)
+                if txn.status == 'pending':
+                    ok, response = check_recharge_status(order_id)
+                    if ok:
+                        inspay_status = response.get('status', 'Pending')
+                        if inspay_status == 'Success':
+                            txn.status = 'success'
+                        elif inspay_status == 'Failure':
+                            txn.status = 'failure'
+                        txn.save()
+                txn_data = {
+                    "order_id": txn.order_id,
+                    "type": "Insurance",
+                    "number": txn.policy_number,
+                    "provider": txn.provider_name,
+                    "amount": txn.amount,
+                    "status": txn.status,
+                    "message": txn.message,
+                    "created_at": txn.created_at
+                }
+            except InsuranceTransaction.DoesNotExist:
+                pass
+
+        if txn_data:
+            return Response(txn_data, status=status.HTTP_200_OK)
 
         return Response(
-            {
-                "order_id": txn.order_id,
-                "mobile_number": txn.mobile_number,
-                "amount": txn.amount,
-                "status": txn.status,
-                "message": txn.message,
-                "created_at": txn.created_at
-            },
-            status=status.HTTP_200_OK
+            {"error": "Transaction not found."},
+            status=status.HTTP_404_NOT_FOUND
         )
 
 
