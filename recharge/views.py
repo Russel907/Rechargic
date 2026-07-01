@@ -782,7 +782,7 @@ class InitiateDTHRechargeView(APIView):
 
         return Response(
             {
-                "message": response.get('message'),
+                "message": response.get('message') or "Transaction failed. Please check details and try again.",
                 "status": dth_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
