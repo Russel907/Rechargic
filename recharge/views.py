@@ -966,6 +966,8 @@ BROADBAND_OPERATORS = {
     '523': 'AirJaldi Rural Broadband',
     '56': 'Tikona Infinet',
     '828': 'TATA PLAY FIBER',
+    '28' : 'Airtel Broadband',
+    '1574': 'Airtel Wi-Fi Recharge',
 }
 
 LPG_OPERATORS = {
