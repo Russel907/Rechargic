@@ -195,7 +195,7 @@ class InitiateRechargeView(APIView):
 
         return Response(
             {
-                "message": response.get('message'),
+                "message": response.get('message') or "Transaction failed. Please check details and try again.",
                 "status": recharge_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
@@ -987,7 +987,7 @@ class PayElectricityBillView(APIView):
         
         return Response(
             {
-                "message": response.get('message'),
+                "message": response.get('message') or "Transaction failed. Please check details and try again.",
                 "status": elec_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
@@ -1153,7 +1153,7 @@ class InitiateFastagRechargeView(APIView):
 
         return Response(
             {
-                "message": response.get('message'),
+                "message": response.get('message') or "Transaction failed. Please check details and try again.",
                 "status": fastag_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
@@ -1322,7 +1322,7 @@ class InitiateBroadbandRechargeView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message'),
+            "message": response.get('message') or "Transaction failed. Please check details and try again.",
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
@@ -1433,7 +1433,7 @@ class InitiateLPGRechargeView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message'),
+            "message": response.get('message') or "Transaction failed. Please check details and try again.",
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
@@ -1546,7 +1546,7 @@ class PayWaterBillView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message'),
+            "message": response.get('message') or "Transaction failed. Please check details and try again.",
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
@@ -1660,7 +1660,7 @@ class PayInsurancePremiumView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message'),
+            "message": response.get('message') or "Transaction failed. Please check details and try again.",
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
