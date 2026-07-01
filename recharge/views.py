@@ -169,7 +169,7 @@ class InitiateRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         recharge_txn.inspay_txid = response.get('txid')
         recharge_txn.inspay_opid = response.get('opid')
-        recharge_txn.message = response.get('message')
+        recharge_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             recharge_txn.status = 'success'
@@ -756,7 +756,7 @@ class InitiateDTHRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         dth_txn.inspay_txid = response.get('txid')
         dth_txn.inspay_opid = response.get('opid')
-        dth_txn.message = response.get('message')
+        dth_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             dth_txn.status = 'success'
@@ -961,7 +961,7 @@ class PayElectricityBillView(APIView):
         inspay_status = response.get('status', 'Pending')
         elec_txn.inspay_txid = response.get('txid')
         elec_txn.inspay_opid = response.get('opid')
-        elec_txn.message = response.get('message')
+        elec_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             elec_txn.status = 'success'
@@ -1128,7 +1128,7 @@ class InitiateFastagRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         fastag_txn.inspay_txid = response.get('txid')
         fastag_txn.inspay_opid = response.get('opid')
-        fastag_txn.message = response.get('message')
+        fastag_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             fastag_txn.status = 'success'
@@ -1298,7 +1298,7 @@ class InitiateBroadbandRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message')
+        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             txn.status = 'success'
@@ -1409,7 +1409,7 @@ class InitiateLPGRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message')
+        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             txn.status = 'success'
@@ -1522,7 +1522,7 @@ class PayWaterBillView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message')
+        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             txn.status = 'success'
@@ -1636,7 +1636,7 @@ class PayInsurancePremiumView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message')
+        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
 
         if inspay_status == 'Success':
             txn.status = 'success'
