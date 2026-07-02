@@ -169,15 +169,22 @@ class InitiateRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         recharge_txn.inspay_txid = response.get('txid')
         recharge_txn.inspay_opid = response.get('opid')
-        recharge_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
+        # Set status first
         if inspay_status == 'Success':
             recharge_txn.status = 'success'
-            # Points NOT awarded here — webhook confirms and awards
         elif inspay_status == 'Failure':
             recharge_txn.status = 'failure'
         else:
             recharge_txn.status = 'pending'
+        # Then set message based on actual status
+        if response.get('message'):
+            recharge_txn.message = response.get('message')
+        elif recharge_txn.status == 'success':
+            recharge_txn.message = "Recharge successful."
+        elif recharge_txn.status == 'failure':
+            recharge_txn.message = "Transaction failed. Please check details and try again."
+        else:
+            recharge_txn.message = "Recharge is being processed."
             recharge_txn.save()
             import time
             time.sleep(3)  # give Inspay a moment to finalize
@@ -195,7 +202,7 @@ class InitiateRechargeView(APIView):
 
         return Response(
             {
-                "message": response.get('message') or "Transaction failed. Please check details and try again.",
+                "message": recharge_txn.message,
                 "status": recharge_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
@@ -756,15 +763,20 @@ class InitiateDTHRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         dth_txn.inspay_txid = response.get('txid')
         dth_txn.inspay_opid = response.get('opid')
-        dth_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
         if inspay_status == 'Success':
             dth_txn.status = 'success'
-            # award_recharge_points(request.user, amount)
         elif inspay_status == 'Failure':
             dth_txn.status = 'failure'
         else:
             dth_txn.status = 'pending'
+        if response.get('message'):
+            dth_txn.message = response.get('message')
+        elif dth_txn.status == 'success':
+            dth_txn.message = "Recharge successful."
+        elif dth_txn.status == 'failure':
+            dth_txn.message = "Transaction failed. Please check details and try again."
+        else:
+            dth_txn.message = "Recharge is being processed."
             dth_txn.save()
 
             import time
@@ -782,7 +794,7 @@ class InitiateDTHRechargeView(APIView):
 
         return Response(
             {
-                "message": response.get('message') or "Transaction failed. Please check details and try again.",
+                "message": dth_txn.message,
                 "status": dth_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
@@ -961,15 +973,20 @@ class PayElectricityBillView(APIView):
         inspay_status = response.get('status', 'Pending')
         elec_txn.inspay_txid = response.get('txid')
         elec_txn.inspay_opid = response.get('opid')
-        elec_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
         if inspay_status == 'Success':
             elec_txn.status = 'success'
-            award_recharge_points(request.user, amount)
         elif inspay_status == 'Failure':
             elec_txn.status = 'failure'
         else:
             elec_txn.status = 'pending'
+        if response.get('message'):
+            elec_txn.message = response.get('message')
+        elif elec_txn.status == 'success':
+            elec_txn.message = "Recharge successful."
+        elif elec_txn.status == 'failure':
+            elec_txn.message = "Transaction failed. Please check details and try again."
+        else:
+            elec_txn.message = "Recharge is being processed."
             elec_txn.save()
 
             import time
@@ -987,7 +1004,7 @@ class PayElectricityBillView(APIView):
         
         return Response(
             {
-                "message": response.get('message') or "Transaction failed. Please check details and try again.",
+                "message": elec_txn.message,
                 "status": elec_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
@@ -1128,14 +1145,20 @@ class InitiateFastagRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         fastag_txn.inspay_txid = response.get('txid')
         fastag_txn.inspay_opid = response.get('opid')
-        fastag_txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
         if inspay_status == 'Success':
             fastag_txn.status = 'success'
         elif inspay_status == 'Failure':
             fastag_txn.status = 'failure'
         else:
             fastag_txn.status = 'pending'
+        if response.get('message'):
+            fastag_txn.message = response.get('message')
+        elif fastag_txn.status == 'success':
+            fastag_txn.message = "Recharge successful."
+        elif fastag_txn.status == 'failure':
+            fastag_txn.message = "Transaction failed. Please check details and try again."
+        else:
+            fastag_txn.message = "Recharge is being processed."
             fastag_txn.save()
 
             import time
@@ -1153,7 +1176,7 @@ class InitiateFastagRechargeView(APIView):
 
         return Response(
             {
-                "message": response.get('message') or "Transaction failed. Please check details and try again.",
+                "message": fastag_txn.message,
                 "status": fastag_txn.status,
                 "order_id": order_id,
                 "txid": response.get('txid'),
@@ -1298,14 +1321,20 @@ class InitiateBroadbandRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
         if inspay_status == 'Success':
             txn.status = 'success'
         elif inspay_status == 'Failure':
             txn.status = 'failure'
         else:
             txn.status = 'pending'
+        if response.get('message'):
+            txn.message = response.get('message')
+        elif txn.status == 'success':
+            txn.message = "Recharge successful."
+        elif txn.status == 'failure':
+            txn.message = "Transaction failed. Please check details and try again."
+        else:
+            txn.message = "Recharge is being processed."
             txn.save()
 
             import time
@@ -1322,7 +1351,7 @@ class InitiateBroadbandRechargeView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message') or "Transaction failed. Please check details and try again.",
+            "message": txn.message,
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
@@ -1409,14 +1438,20 @@ class InitiateLPGRechargeView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
         if inspay_status == 'Success':
             txn.status = 'success'
         elif inspay_status == 'Failure':
             txn.status = 'failure'
         else:
             txn.status = 'pending'
+        if response.get('message'):
+            txn.message = response.get('message')
+        elif txn.status == 'success':
+            txn.message = "Recharge successful."
+        elif txn.status == 'failure':
+            txn.message = "Transaction failed. Please check details and try again."
+        else:
+            txn.message = "Recharge is being processed."
             txn.save()
 
             import time
@@ -1433,7 +1468,7 @@ class InitiateLPGRechargeView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message') or "Transaction failed. Please check details and try again.",
+            "message": txn.message,
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
@@ -1522,14 +1557,20 @@ class PayWaterBillView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
         if inspay_status == 'Success':
             txn.status = 'success'
         elif inspay_status == 'Failure':
             txn.status = 'failure'
         else:
             txn.status = 'pending'
+        if response.get('message'):
+            txn.message = response.get('message')
+        elif txn.status == 'success':
+            txn.message = "Recharge successful."
+        elif txn.status == 'failure':
+            txn.message = "Transaction failed. Please check details and try again."
+        else:
+            txn.message = "Recharge is being processed."
             txn.save()
 
             import time
@@ -1546,7 +1587,7 @@ class PayWaterBillView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message') or "Transaction failed. Please check details and try again.",
+            "message": txn.message,
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
@@ -1636,14 +1677,20 @@ class PayInsurancePremiumView(APIView):
         inspay_status = response.get('status', 'Pending')
         txn.inspay_txid = response.get('txid')
         txn.inspay_opid = response.get('opid')
-        txn.message = response.get('message') or "Transaction failed. Please check details and try again."
-
         if inspay_status == 'Success':
             txn.status = 'success'
         elif inspay_status == 'Failure':
             txn.status = 'failure'
         else:
             txn.status = 'pending'
+        if response.get('message'):
+            txn.message = response.get('message')
+        elif txn.status == 'success':
+            txn.message = "Recharge successful."
+        elif txn.status == 'failure':
+            txn.message = "Transaction failed. Please check details and try again."
+        else:
+            txn.message = "Recharge is being processed."
             txn.save()
 
             import time
@@ -1660,7 +1707,7 @@ class PayInsurancePremiumView(APIView):
         txn.save()
 
         return Response({
-            "message": response.get('message') or "Transaction failed. Please check details and try again.",
+            "message": txn.message,
             "status": txn.status,
             "order_id": order_id,
             "txid": response.get('txid'),
